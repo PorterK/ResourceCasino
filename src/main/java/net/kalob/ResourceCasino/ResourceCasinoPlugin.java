@@ -189,6 +189,7 @@ public final class ResourceCasinoPlugin extends JavaPlugin {
             data.ledger().pay(bet.resource, bet.payout);
         }
         if (announceMultiplier > 0 && bet.payout >= bet.stake * announceMultiplier) {
+            if (casino != null && casino.world() != null) casino.crowd().cheerAll();
             Bukkit.getServer().sendMessage(Items.mm(PREFIX + "<yellow>" + bet.playerName + "</yellow> <gray>just won</gray> "
                     + Items.amount(bet.resource, bet.payout) + " <gray>on</gray> <gold>" + bet.game + "</gold><gray>!</gray>"));
         }

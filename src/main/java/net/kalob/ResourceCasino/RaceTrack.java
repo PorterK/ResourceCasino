@@ -177,6 +177,10 @@ final class RaceTrack {
                 Location lead = horses.get(plan.leader(t)).getLocation();
                 world.playSound(lead, Sound.ENTITY_HORSE_GALLOP, 1.5f, 1f);
             }
+            if (t % 5 == 0 && t <= plan.raceFrames() + 20) {
+                plugin.casino().crowd().watch(Crowd.GROUP_STAND, horses.get(plan.leader(Math.min(t, plan.raceFrames()))).getLocation());
+            }
+            call(plan, t);
             if (t == plan.raceFrames()) celebrate(world, plan.winner());
             if (t >= plan.frames() + 80) {
                 clearHorses();
@@ -186,7 +190,21 @@ final class RaceTrack {
         return true;
     }
 
+    /** The race caller's commentary at the start, each quarter, and the finish. */
+    private void call(HorseRace.RacePlan plan, int t) {
+        int frames = plan.raceFrames();
+        Crowd crowd = plugin.casino().crowd();
+        String leader = HorseRaceMenu.horseName(plan.leader(Math.max(1, t)));
+        if (t == 1) crowd.announce("And they're off!");
+        else if (t == frames / 4) crowd.announce(leader + " <white>shows early speed down the back straight.");
+        else if (t == frames / 2) crowd.announce("Into the far turn, it's " + leader + " <white>in front!");
+        else if (t == frames * 3 / 4) crowd.announce(leader + " <white>leads them into the home stretch!");
+        else if (t == frames) crowd.announce("And at the line, it's " + HorseRaceMenu.horseName(plan.winner()) + "<white>!");
+    }
+
     private void celebrate(World world, int winner) {
+        plugin.casino().crowd().cheer(Crowd.GROUP_STAND);
+        plugin.casino().crowd().staffHop(CasinoWorld.Station.HORSES);
         double[] p = pointOnLap(winner, 1.0);
         Location line = new Location(world, p[0], CasinoWorld.FLOOR + 2, p[1]);
         world.spawnParticle(Particle.TOTEM_OF_UNDYING, line, 80, 0.6, 0.8, 0.6, 0.4);

@@ -56,8 +56,16 @@ final class CasinoListener implements Listener {
         if (!plugin.casino().isCasinoEntity(event.getRightClicked())) return;
         event.setCancelled(true);
         if (event.getHand() != EquipmentSlot.HAND) return;
-        if (CasinoWorld.ROLE_CASHIER.equals(plugin.casino().role(event.getRightClicked()))) {
-            open(event.getPlayer(), CasinoWorld.Station.CASHIER);
+        String role = plugin.casino().role(event.getRightClicked());
+        if (role == null) return;
+        if (role.startsWith(Crowd.STAFF)) {
+            try {
+                open(event.getPlayer(), CasinoWorld.Station.valueOf(role.substring(Crowd.STAFF.length())));
+            } catch (IllegalArgumentException ignored) {
+                // unknown station name
+            }
+        } else if (role.startsWith(Crowd.TALK)) {
+            plugin.casino().crowd().talk(event.getPlayer(), role.substring(Crowd.TALK.length()));
         }
     }
 

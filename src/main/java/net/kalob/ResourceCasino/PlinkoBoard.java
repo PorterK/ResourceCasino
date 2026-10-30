@@ -85,6 +85,7 @@ final class PlinkoBoard {
                 return;
             }
             if (t <= land) ball.teleport(position(world, drop, t));
+            if (t % 3 == 0 && t <= land) plugin.casino().crowd().watch(Crowd.GROUP_PLINKO, ball.getLocation());
             if (t > START_TICKS && t < land && (t - START_TICKS) % HOP_TICKS == 0) {
                 world.playSound(ball.getLocation(), Sound.BLOCK_WOODEN_BUTTON_CLICK_ON, 0.6f, 1.2f + (t % 7) * 0.08f);
             }
@@ -96,6 +97,8 @@ final class PlinkoBoard {
                         multiplier >= 1 ? 1.4f : 0.7f);
                 world.spawnParticle(multiplier >= 3 ? Particle.TOTEM_OF_UNDYING : Particle.CRIT, at, multiplier >= 3 ? 40 : 10,
                         0.2, 0.3, 0.2, 0.2);
+                if (multiplier > 1) plugin.casino().crowd().cheer(Crowd.GROUP_PLINKO);
+                else plugin.casino().crowd().grumble(Crowd.GROUP_PLINKO);
             }
             if (t >= land + HOLD_TICKS) {
                 ball.remove();

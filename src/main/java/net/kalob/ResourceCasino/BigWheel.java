@@ -133,7 +133,7 @@ final class BigWheel {
      * using the same easing as the wheel screen so both stop together.
      * Returns false if the wheel is already spinning for someone else (or isn't built).
      */
-    boolean spin(int start, int steps, int ticks) {
+    boolean spin(int start, int steps, int ticks, boolean playerWon) {
         if (!present() || spinning()) return false;
         int[] tick = {0};
         int[] lastClick = {start};
@@ -142,6 +142,7 @@ final class BigWheel {
             int t = ++tick[0];
             double top = start + steps * Wheel.ease(t / (double) ticks);
             place(top);
+            if (t % 4 == 0) plugin.casino().crowd().watch(Crowd.GROUP_WHEEL, new Location(world, CENTER_X, CENTER_Y, CENTER_Z));
             int whole = (int) Math.floor(top);
             if (whole != lastClick[0]) {
                 lastClick[0] = whole;
@@ -153,6 +154,8 @@ final class BigWheel {
                 Location at = new Location(world, CENTER_X - 0.5, CENTER_Y + RADIUS, CENTER_Z);
                 world.spawnParticle(Particle.FIREWORK, at, 40, 0.4, 0.4, 0.4, 0.05);
                 world.playSound(at, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1.2f);
+                if (playerWon) plugin.casino().crowd().cheer(Crowd.GROUP_WHEEL);
+                else plugin.casino().crowd().grumble(Crowd.GROUP_WHEEL);
                 stop();
             }
         }, 1L, 1L);

@@ -179,7 +179,7 @@ final class RouletteWheel {
      * Spins so the ball ends in {@code pocket} at tick {@code ticks}. Returns false if the
      * wheel is already spinning for someone else (or isn't built).
      */
-    boolean spin(int pocket, int ticks) {
+    boolean spin(int pocket, int ticks, boolean playerWon) {
         if (!present() || spinning() || ball == null) return false;
         int index = 0;
         for (int i = 0; i < Roulette.WHEEL_ORDER.length; i++) if (Roulette.WHEEL_ORDER[i] == pocket) index = i;
@@ -196,6 +196,8 @@ final class RouletteWheel {
         int[] lastClick = {0};
         Location sound = new Location(world, CENTER_X, SURFACE_Y + 0.5, CENTER_Z);
         world.playSound(sound, Sound.BLOCK_GRINDSTONE_USE, 0.6f, 1.6f);
+        Crowd crowd = plugin.casino().crowd();
+        crowd.gather(Math.max(20, ticks - 20));
         task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             int t = ++tick[0];
             wheelAngle = wheel0 + omega * (t - t * (double) t / (2.0 * total));
@@ -221,12 +223,16 @@ final class RouletteWheel {
             if (t == ticks) {
                 ballAngle = wheelAngle + target;
                 lastPocket = pocket;
+                crowd.staffHop(CasinoWorld.Station.ROULETTE);
+                if (playerWon) crowd.cheer(Crowd.GROUP_ROULETTE);
+                else crowd.grumble(Crowd.GROUP_ROULETTE);
                 world.playSound(sound, Sound.BLOCK_NOTE_BLOCK_PLING, 1f, 1.4f);
                 world.spawnParticle(Particle.FIREWORK, new Location(world, CENTER_X + Math.cos(ballAngle) * POCKET_RADIUS,
                         SURFACE_Y + 0.5, CENTER_Z + Math.sin(ballAngle) * POCKET_RADIUS), 20, 0.2, 0.2, 0.2, 0.03);
             }
             if (t > ticks) ballAngle = wheelAngle + target;
             apply(2);
+            if (t % 3 == 0 && t < ticks + 20) crowd.watch(Crowd.GROUP_ROULETTE, ball.getLocation());
             if (t >= total) stop();
         }, 1L, 1L);
         return true;

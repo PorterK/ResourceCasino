@@ -87,7 +87,7 @@ final class WheelMenu extends GameMenu {
         int start = plugin.wheelTop();
         int total = wheel.size() * 3 + Math.floorMod(result - start, wheel.size());
         int ticks = plugin.wheelTicks();
-        boolean big = plugin.casino().bigWheel().spin(start, total, ticks);
+        boolean big = plugin.casino().bigWheel().spin(start, total, ticks, m > 1);
         plugin.setWheelTop(result);
         if (big) plugin.tell(player, "<light_purple>The big wheel on the casino floor is spinning for you!");
         sound("block.chain.place", 0.8f, 0.6f);

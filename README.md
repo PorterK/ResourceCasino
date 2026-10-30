@@ -34,7 +34,9 @@ Drop it into your server's `plugins/` folder and restart. You need Paper 26.3 ru
 - **Roulette wheel**: a real wheel set into the floor with 37 numbered pockets. On a spin the wheel turns one way while the ball slides round the rim the other way, slows, rattles down off the rim and drops into the winning pocket. Click the rim to bet.
 - **Plinko board**: a tall pegboard on the west wall, 8 rows of pegs over 9 coloured bins. Balls bounce peg to peg; up to 8 can be in play at once.
 - **The big wheel**: a giant glowing wheel on the east wall. Spins from the wheel screen turn it, and it stops on the same segment.
-- **Cashier** booth with a cashier villager (right-click it), a row of nine **slot machines**, a lobby kiosk in the middle and an exit by the entrance
+- **Cashier** booth, and behind it the **house vault**: a barred gate in the wall, a huge round vault door swung open, piles of gold, emerald and diamond blocks, and a sign showing what the house has actually won
+- A row of nine **slot machines**, a **bar** with a bartender and back shelves, a lobby kiosk in the middle and an exit by the entrance
+- **People**: staff at every game (cashier, croupier, race caller, Plinko host, wheel host, slots attendant, floor host; right-click any of them to play), plus a bouncer, a bartender and a vault guard who chat when clicked. Patrons fill the grandstand, the roulette rail, the slot machines and the bar. They follow the action with their heads, cheer and grumble at results, pull slot levers on their own, and a few wander over whenever the roulette wheel spins. The race caller commentates each race in chat, and the whole floor cheers when someone wins big.
 
 Each physical game shows one round at a time (Plinko up to 8). If it's busy, or you're playing from somewhere else, the chest screen still shows your result.
 

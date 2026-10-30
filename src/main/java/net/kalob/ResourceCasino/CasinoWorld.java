@@ -12,7 +12,6 @@ import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
-import org.bukkit.entity.Villager;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Transformation;
@@ -53,7 +52,7 @@ final class CasinoWorld {
 
     record Pos(int x, int y, int z) {}
 
-    static final String ROLE_TITLE = "title", ROLE_CASHIER = "cashier", ROLE_WHEEL = "wheel", ROLE_HORSE = "horse",
+    static final String ROLE_TITLE = "title", ROLE_CASHIER = Crowd.STAFF + "CASHIER", ROLE_WHEEL = "wheel", ROLE_HORSE = "horse",
             ROLE_ROULETTE = "roulette", ROLE_PLINKO = "plinko";
 
     private final ResourceCasinoPlugin plugin;
@@ -63,6 +62,8 @@ final class CasinoWorld {
     private final RaceTrack track;
     private final RouletteWheel rouletteWheel;
     private final PlinkoBoard plinko;
+    private final Crowd crowd;
+    private final Vault vault;
     private World world;
     private BukkitTask upkeep;
 
@@ -76,6 +77,8 @@ final class CasinoWorld {
         this.track = new RaceTrack(plugin);
         this.rouletteWheel = new RouletteWheel(plugin);
         this.plinko = new PlinkoBoard(plugin);
+        this.crowd = new Crowd(plugin);
+        this.vault = new Vault(plugin);
     }
 
     World world() { return world; }
@@ -87,6 +90,10 @@ final class CasinoWorld {
     RouletteWheel rouletteWheel() { return rouletteWheel; }
 
     PlinkoBoard plinko() { return plinko; }
+
+    Crowd crowd() { return crowd; }
+
+    Vault vault() { return vault; }
 
     boolean isCasinoWorld(World other) {
         return world != null && other != null && other.getUID().equals(world.getUID());
@@ -218,7 +225,7 @@ final class CasinoWorld {
 
     private void clear() {
         for (int x = -HALF; x <= HALF; x++) {
-            for (int z = -HALF; z <= HALF; z++) {
+            for (int z = -HALF; z <= Vault.ROOM_Z1 + 1; z++) {
                 for (int y = FLOOR - 1; y <= CEILING + 1; y++) {
                     Block block = world.getBlockAt(x, y, z);
                     if (!block.getType().isAir()) block.setType(Material.AIR, false);
@@ -304,6 +311,8 @@ final class CasinoWorld {
         buildWheel(y);
         buildSlots(y);
         buildCashier(y);
+        buildVault(y);
+        buildBar(y);
 
         // Lobby kiosk in the middle, exit by the spawn point.
         station(Station.LOBBY);
@@ -501,6 +510,70 @@ final class CasinoWorld {
         current = null;
     }
 
+    private void buildVault(int y) {
+        current = null;
+        if (!placing) return;
+        // Barred gate in the south wall, with a heavy stone frame.
+        for (int x = Vault.GATE_X0 - 1; x <= Vault.GATE_X1 + 1; x++) {
+            for (int wy = y + 1; wy <= y + 5; wy++) {
+                boolean frame = x == Vault.GATE_X0 - 1 || x == Vault.GATE_X1 + 1 || wy == y + 5;
+                put(x, wy, HALF, frame ? Material.POLISHED_DEEPSLATE : Material.IRON_BARS);
+            }
+        }
+        // The room itself, sunk into the void behind the wall.
+        for (int x = Vault.ROOM_X0; x <= Vault.ROOM_X1; x++) {
+            for (int z = Vault.ROOM_Z0; z <= Vault.ROOM_Z1; z++) {
+                boolean edge = x == Vault.ROOM_X0 || x == Vault.ROOM_X1 || z == Vault.ROOM_Z1;
+                put(x, y, z, Math.floorMod(x + z, 2) == 0 ? Material.GOLD_BLOCK : Material.POLISHED_DEEPSLATE);
+                put(x, Vault.ROOM_TOP, z, Material.POLISHED_DEEPSLATE_BRICKS);
+                for (int wy = y + 1; wy < Vault.ROOM_TOP; wy++) {
+                    if (edge) put(x, wy, z, wy == y + 3 && !(z == Vault.ROOM_Z1 && x % 3 != 0) ? Material.SEA_LANTERN
+                            : Material.POLISHED_DEEPSLATE_BRICKS);
+                }
+            }
+        }
+        for (int x = Vault.ROOM_X0 + 1; x < Vault.ROOM_X1; x += 3) {
+            put(x, y + 4, Vault.ROOM_Z0 + 3, "minecraft:light[level=15]");
+        }
+        // Piles of treasure along the back wall.
+        int pz = Vault.ROOM_Z1 - 2;
+        Material[] piles = {Material.GOLD_BLOCK, Material.EMERALD_BLOCK, Material.DIAMOND_BLOCK};
+        int[] px = {22, 26, 29};
+        for (int i = 0; i < piles.length; i++) {
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) put(px[i] + dx, y + 1, pz + dz, piles[i]);
+            }
+            put(px[i], y + 2, pz, piles[i]);
+        }
+        put(25, y + 1, Vault.ROOM_Z0 + 3, Material.NETHERITE_BLOCK);
+        put(24, y + 1, Vault.ROOM_Z0 + 4, Material.NETHERITE_BLOCK);
+        put(25, y + 2, Vault.ROOM_Z0 + 4, Material.NETHERITE_BLOCK);
+        // Strongboxes down the side walls.
+        for (int z = Vault.ROOM_Z0; z <= Vault.ROOM_Z0 + 3; z++) {
+            put(Vault.ROOM_X0 + 1, y + 1, z, "minecraft:chest[facing=east]");
+            put(Vault.ROOM_X1 - 1, y + 1, z, "minecraft:chest[facing=west]");
+            put(Vault.ROOM_X0 + 1, y + 2, z, "minecraft:barrel[facing=up]");
+        }
+    }
+
+    private void buildBar(int y) {
+        current = null;
+        if (!placing) return;
+        int z0 = Bar.CENTER_Z - Bar.HALF_LENGTH, z1 = Bar.CENTER_Z + Bar.HALF_LENGTH;
+        for (int z = z0; z <= z1; z++) {
+            put(Bar.COUNTER_X, y + 1, z, Material.STRIPPED_DARK_OAK_WOOD);
+            put(Bar.COUNTER_X, y + 2, z, "minecraft:spruce_slab[type=bottom]");
+            // Back shelves: barrels with brewing stands and lanterns on top.
+            put(Bar.SHELF_X, y + 1, z, "minecraft:barrel[facing=west]");
+            put(Bar.SHELF_X, y + 2, z, Math.floorMod(z, 2) == 0 ? "minecraft:brewing_stand" : "minecraft:lantern[hanging=false]");
+        }
+        for (int x = Bar.COUNTER_X + 1; x < Bar.SHELF_X; x++) {
+            put(x, y + 1, z0, Material.STRIPPED_DARK_OAK_WOOD);
+            put(x, y + 1, z1, Material.STRIPPED_DARK_OAK_WOOD);
+        }
+        for (int z = z0; z <= z1; z += 4) put(Bar.COUNTER_X + 2, y + 6, z, "minecraft:light[level=15]");
+    }
+
     // ---- floating signs, the cashier, the big wheel -----------------------------------------
 
     void tag(Entity entity, String role) {
@@ -519,6 +592,8 @@ final class CasinoWorld {
         if (world == null) return;
         bigWheel.forget();
         rouletteWheel.forget();
+        crowd.forget();
+        vault.forget();
         track.reset();
         for (Entity entity : world.getEntities()) {
             if (!(entity instanceof Player) && isCasinoEntity(entity)) entity.remove();
@@ -561,21 +636,13 @@ final class CasinoWorld {
         title(18.5, y + 3.6, stands, "<gold>Horse Racing bets", 0.9f);
         title(0.5, y + 3.4, HALF - 0.5, "<green><bold>EXIT", 1.2f);
 
-        Location cashierSpot = new Location(world, 25.5, y + 1, HALF - 4.5, 180f, 0f);
-        world.spawn(cashierSpot, Villager.class, villager -> {
-            villager.setAI(false);
-            villager.setInvulnerable(true);
-            villager.setSilent(true);
-            villager.setPersistent(false);
-            villager.setRemoveWhenFarAway(false);
-            villager.setCollidable(false);
-            villager.customName(Items.mm("<gold><bold>Cashier"));
-            villager.setCustomNameVisible(true);
-            tag(villager, ROLE_CASHIER);
-        });
+        title(Bar.COUNTER_X + 2.5, y + 4.6, Bar.CENTER_Z + 0.5, "<gold><bold>BAR", 2.2f);
+        title((Vault.GATE_X0 + Vault.GATE_X1) / 2.0 + 0.5, y + 5.0, HALF - 0.6, "<gray><bold>VAULT", 1.4f);
 
         bigWheel.spawn(world);
         rouletteWheel.spawn(world);
+        vault.spawn(world);
+        crowd.spawn(world);
     }
 
     TextDisplay title(double x, double y, double z, String text, float scale) {

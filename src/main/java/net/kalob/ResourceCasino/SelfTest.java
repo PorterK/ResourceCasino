@@ -87,6 +87,23 @@ final class SelfTest {
         expect(plugin.casino().stationAt(world.getBlockAt(0, y, 0)) == null, "plain floor shouldn't be a station");
         expect(plugin.casino().bigWheel().size() == plugin.wheel().size(), "big wheel has " + plugin.casino().bigWheel().size() + " segments");
         expect(plugin.casino().rouletteWheel().present(), "roulette wheel missing");
+        Crowd crowd = plugin.casino().crowd();
+        expect(crowd.count(Crowd.GROUP_STAFF) == 10, "expected 10 staff, found " + crowd.count(Crowd.GROUP_STAFF));
+        expect(crowd.count(Crowd.GROUP_STAND) >= 15, "grandstand only has " + crowd.count(Crowd.GROUP_STAND) + " people");
+        expect(crowd.count(Crowd.GROUP_ROULETTE) == 6, "roulette rail has " + crowd.count(Crowd.GROUP_ROULETTE));
+        expect(crowd.count(Crowd.GROUP_SLOTS) == 4, "slot gamblers: " + crowd.count(Crowd.GROUP_SLOTS));
+        expect(crowd.count(Crowd.GROUP_BAR) == 3, "bar regulars: " + crowd.count(Crowd.GROUP_BAR));
+        notes.add("crowd: " + crowd.size() + " villagers");
+        for (CasinoWorld.Station station : CasinoWorld.Station.values()) {
+            if (station == CasinoWorld.Station.EXIT) continue;
+            long staff = world.getEntitiesByClass(Villager.class).stream()
+                    .filter(v -> (Crowd.STAFF + station.name()).equals(plugin.casino().role(v))).count();
+            expect(staff == 1, "expected 1 staff member for " + station + ", found " + staff);
+        }
+        expect(plugin.casino().vault().present(), "vault sign missing");
+        expectBlock(world.getBlockAt(Vault.GATE_X0, y + 2, h), Material.IRON_BARS, "vault gate");
+        expectBlock(world.getBlockAt(22, y + 1, Vault.ROOM_Z1 - 2), Material.GOLD_BLOCK, "vault gold");
+        expectBlock(world.getBlockAt(Bar.COUNTER_X, y + 1, Bar.CENTER_Z), Material.STRIPPED_DARK_OAK_WOOD, "bar counter");
         long cashiers = world.getEntitiesByClass(Villager.class).stream()
                 .filter(v -> CasinoWorld.ROLE_CASHIER.equals(plugin.casino().role(v))).count();
         expect(cashiers == 1, "expected 1 cashier, found " + cashiers);
@@ -194,8 +211,8 @@ final class SelfTest {
         int start = plugin.wheelTop();
         int target = 11;
         int steps = plugin.wheel().size() * 2 + Math.floorMod(target - start, plugin.wheel().size());
-        expect(big.spin(start, steps, 40), "big wheel refused to spin");
-        expect(!big.spin(start, steps, 40), "big wheel spun twice at once");
+        expect(big.spin(start, steps, 40, true), "big wheel refused to spin");
+        expect(!big.spin(start, steps, 40, false), "big wheel spun twice at once");
         Bukkit.getScheduler().runTaskLater(plugin, () -> step("big wheel stopped on segment " + target, () -> {
             expect(!big.spinning(), "still spinning");
             expect(big.topSegment() == target, "top segment is " + big.topSegment() + ", wanted " + target);
@@ -241,15 +258,18 @@ final class SelfTest {
     private void checkRouletteWheel() {
         RouletteWheel wheel = plugin.casino().rouletteWheel();
         int pocket = 17;
-        expect(wheel.spin(pocket, 60), "roulette wheel refused to spin");
-        expect(!wheel.spin(5, 60), "roulette wheel spun twice at once");
+        expect(wheel.spin(pocket, 60, false), "roulette wheel refused to spin");
+        expect(!wheel.spin(5, 60, true), "roulette wheel spun twice at once");
+        expect(plugin.casino().crowd().walkers() == 3, "nobody wandered over to watch the spin");
         Bukkit.getScheduler().runTaskLater(plugin, () -> step("roulette ball settled", () -> {
             expect(wheel.ballPocket() == pocket, "ball says pocket " + wheel.ballPocket());
             expect(wheel.pocketUnderBall() == pocket, "ball is over pocket " + wheel.pocketUnderBall() + ", wanted " + pocket);
             expect(Math.abs(wheel.ballRadius() - RouletteWheel.POCKET_RADIUS) < 1e-6, "ball not down in the pockets");
         }), 75L);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> step("roulette wheel stopped", () ->
-                expect(!wheel.spinning(), "wheel still spinning")), 150L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> step("roulette wheel stopped", () -> {
+            expect(!wheel.spinning(), "wheel still spinning");
+            expect(plugin.casino().crowd().walkers() == 0, "onlookers didn't leave");
+        }), 150L);
     }
 
     private void checkPlinko() {
