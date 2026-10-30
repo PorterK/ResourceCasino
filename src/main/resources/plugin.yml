@@ -1,0 +1,21 @@
+name: ResourceCasino
+version: '${version}'
+main: net.kalob.ResourceCasino.ResourceCasinoPlugin
+api-version: '26.3'
+description: Bet iron, copper, emeralds, diamonds and netherite on roulette, slots, duck racing and the wheel.
+author: PorterK
+website: https://github.com/PorterK/ResourceCasino
+
+commands:
+  casino:
+    description: Open the casino, travel to the casino floor, or play a game
+    usage: /<command> [cashier|roulette|slots|derby|wheel|tp|leave|balance|odds|build|stats|reload]
+    aliases: [rc]
+
+permissions:
+  resourcecasino.play:
+    description: Play casino games and use the cashier
+    default: true
+  resourcecasino.admin:
+    description: Build the casino floor, see house stats, reload the config
+    default: op

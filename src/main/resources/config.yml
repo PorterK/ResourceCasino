@@ -1,0 +1,38 @@
+# ResourceCasino
+# Players deposit iron, copper, emeralds, diamonds and netherite at the cashier,
+# play from that balance, and withdraw real items back out. Each resource is its
+# own currency: bet diamonds, win diamonds. Every game is set so the house wins
+# over time, like a real casino.
+
+# true: /casino <game> opens a game from anywhere.
+# false: games only open at their tables on the casino floor (/casino tp).
+play-anywhere: true
+
+# Name of the casino floor world (a void world with the casino built in it).
+world-name: resourcecasino
+
+# Keep the casino floor loaded so the wheel, the cashier and the signs never vanish.
+keep-casino-loaded: true
+
+# Biggest single bet, per resource. Roulette counts all chips on one spin.
+max-bet:
+  copper: 256
+  iron: 128
+  emerald: 64
+  diamond: 32
+  netherite: 8
+
+# Tell the whole server about wins of at least this many times the stake. 0 = never.
+announce-big-wins: 10
+
+duck-derby:
+  # Cut the house takes on every duck. 0.10 = odds pay 90% of fair.
+  house-edge: 0.10
+  race-seconds: 8
+
+wheel:
+  # 24 multipliers, clockwise from the top. 0 = lose, 1 = stake back.
+  # The average must stay under 1 (the house has to win), or the default wheel is used.
+  # Default average: 23/24 = 95.8% back.
+  segments: [10, 0, 1, 0, 2, 0, 1.5, 0, 0, 1, 0, 3, 0, 1.5, 0, 0, 2, 0, 1, 0, 0, 0, 0, 0]
+  spin-seconds: 6
