@@ -525,10 +525,10 @@ final class CasinoWorld {
             for (int z = Vault.ROOM_Z0; z <= Vault.ROOM_Z1; z++) {
                 boolean edge = x == Vault.ROOM_X0 || x == Vault.ROOM_X1 || z == Vault.ROOM_Z1;
                 put(x, y, z, Math.floorMod(x + z, 2) == 0 ? Material.GOLD_BLOCK : Material.POLISHED_DEEPSLATE);
-                put(x, Vault.ROOM_TOP, z, Material.POLISHED_DEEPSLATE_BRICKS);
+                put(x, Vault.ROOM_TOP, z, Material.DEEPSLATE_BRICKS);
                 for (int wy = y + 1; wy < Vault.ROOM_TOP; wy++) {
                     if (edge) put(x, wy, z, wy == y + 3 && !(z == Vault.ROOM_Z1 && x % 3 != 0) ? Material.SEA_LANTERN
-                            : Material.POLISHED_DEEPSLATE_BRICKS);
+                            : Material.DEEPSLATE_BRICKS);
                 }
             }
         }
