@@ -63,16 +63,16 @@ class GamesTest {
     }
 
     @Test
-    void everyDuckPaysUnderFairOdds() {
+    void everyHorsePaysUnderFairOdds() {
         SplittableRandom random = new SplittableRandom(1);
         for (double edge : new double[]{0.02, 0.10, 0.25}) {
             for (int i = 0; i < 200; i++) {
-                DuckDerby.Field field = DuckDerby.newField(random, edge);
+                HorseRace.Field field = HorseRace.newField(random, edge);
                 double sum = 0;
-                for (int duck = 0; duck < DuckDerby.DUCKS; duck++) {
-                    sum += field.winChance()[duck];
-                    assertTrue(field.expectedReturn(duck) <= 1 - edge + 1e-9,
-                            "duck " + duck + " returns " + field.expectedReturn(duck) + " at edge " + edge);
+                for (int horse = 0; horse < HorseRace.HORSES; horse++) {
+                    sum += field.winChance()[horse];
+                    assertTrue(field.expectedReturn(horse) <= 1 - edge + 1e-9,
+                            "horse " + horse + " returns " + field.expectedReturn(horse) + " at edge " + edge);
                 }
                 assertEquals(1.0, sum, 1e-9);
             }
@@ -83,21 +83,21 @@ class GamesTest {
     void theChosenWinnerAlwaysCrossesFirst() {
         SplittableRandom random = new SplittableRandom(2);
         for (int i = 0; i < 500; i++) {
-            int winner = random.nextInt(DuckDerby.DUCKS);
-            DuckDerby.RacePlan plan = DuckDerby.plan(winner, 160, 30, random);
+            int winner = random.nextInt(HorseRace.HORSES);
+            HorseRace.RacePlan plan = HorseRace.plan(winner, 160, 30, random);
             int first = -1;
             for (int t = 0; t <= plan.frames() && first < 0; t++) {
-                for (int duck = 0; duck < DuckDerby.DUCKS; duck++) {
-                    if (plan.at(duck, t) >= 1.0) {
-                        assertEquals(winner, duck, "wrong duck first at frame " + t);
+                for (int horse = 0; horse < HorseRace.HORSES; horse++) {
+                    if (plan.at(horse, t) >= 1.0) {
+                        assertEquals(winner, horse, "wrong horse first at frame " + t);
                         assertEquals(plan.raceFrames(), t);
-                        first = duck;
+                        first = horse;
                     }
                 }
             }
-            for (int duck = 0; duck < DuckDerby.DUCKS; duck++) {
-                assertEquals(1.0, plan.at(duck, plan.frames()), 1e-9, "duck " + duck + " never finished");
-                for (int t = 1; t <= plan.frames(); t++) assertTrue(plan.at(duck, t) >= plan.at(duck, t - 1), "duck went backwards");
+            for (int horse = 0; horse < HorseRace.HORSES; horse++) {
+                assertEquals(1.0, plan.at(horse, plan.frames()), 1e-9, "horse " + horse + " never finished");
+                for (int t = 1; t <= plan.frames(); t++) assertTrue(plan.at(horse, t) >= plan.at(horse, t - 1), "horse went backwards");
             }
         }
     }
@@ -110,5 +110,26 @@ class GamesTest {
         assertEquals(26, Payouts.apply(10, 2.6));
         assertEquals("1.5x", Payouts.format(1.5));
         assertEquals("10x", Payouts.format(10));
+    }
+
+    @Test
+    void plinkoFavoursTheHouse() {
+        assertEquals(245.6 / 256, Plinko.expectedReturn(), 1e-9);
+        double total = 0;
+        for (int bin = 0; bin < Plinko.BINS; bin++) total += Plinko.chance(bin);
+        assertEquals(1.0, total, 1e-12);
+        for (int bin = 0; bin < Plinko.BINS; bin++) {
+            assertEquals(Plinko.MULTIPLIERS[bin], Plinko.MULTIPLIERS[Plinko.BINS - 1 - bin], "board isn't symmetric");
+        }
+    }
+
+    @Test
+    void plinkoPathsEndInTheirBin() {
+        SplittableRandom random = new SplittableRandom(4);
+        for (int i = 0; i < 1000; i++) {
+            Plinko.Drop drop = Plinko.drop(random);
+            assertEquals(drop.bin() * 2 - Plinko.ROWS, drop.offsetAfter(Plinko.ROWS));
+            for (int row = 0; row <= Plinko.ROWS; row++) assertTrue(Math.abs(drop.offsetAfter(row)) <= row);
+        }
     }
 }

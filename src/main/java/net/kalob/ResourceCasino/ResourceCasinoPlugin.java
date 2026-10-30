@@ -23,7 +23,7 @@ import java.util.random.RandomGenerator;
 
 /**
  * ResourceCasino: deposit real resources at the cashier, play roulette, slots,
- * Duck Derby and the wheel, and withdraw what's left. The house always has the edge.
+ * horse racing, Plinko and the wheel, and withdraw what's left. The house always has the edge.
  */
 public final class ResourceCasinoPlugin extends JavaPlugin {
 
@@ -41,8 +41,8 @@ public final class ResourceCasinoPlugin extends JavaPlugin {
     private String worldName = "resourcecasino";
     private boolean keepLoaded = true;
     private double announceMultiplier = 10;
-    private double derbyEdge = 0.10;
-    private int raceSeconds = 8;
+    private double horseEdge = 0.10;
+    private int raceSeconds = 12;
     private int wheelSeconds = 6;
     private int wheelTop;
 
@@ -126,8 +126,8 @@ public final class ResourceCasinoPlugin extends JavaPlugin {
         worldName = getConfig().getString("world-name", "resourcecasino");
         keepLoaded = getConfig().getBoolean("keep-casino-loaded", true);
         announceMultiplier = getConfig().getDouble("announce-big-wins", 10);
-        derbyEdge = Math.max(0.02, Math.min(0.5, getConfig().getDouble("duck-derby.house-edge", 0.10)));
-        raceSeconds = Math.max(4, Math.min(30, getConfig().getInt("duck-derby.race-seconds", 8)));
+        horseEdge = Math.max(0.02, Math.min(0.5, getConfig().getDouble("horse-racing.house-edge", 0.10)));
+        raceSeconds = Math.max(6, Math.min(40, getConfig().getInt("horse-racing.race-seconds", 12)));
         wheelSeconds = Math.max(3, Math.min(20, getConfig().getInt("wheel.spin-seconds", 6)));
         for (Resource resource : Resource.values()) {
             maxBet.put(resource, Math.max(1, getConfig().getLong("max-bet." + resource.configKey(), 64)));
@@ -244,7 +244,7 @@ public final class ResourceCasinoPlugin extends JavaPlugin {
 
     boolean keepLoaded() { return keepLoaded; }
 
-    double derbyEdge() { return derbyEdge; }
+    double horseEdge() { return horseEdge; }
 
     int raceTicks() { return raceSeconds * 20; }
 

@@ -11,7 +11,7 @@ import java.util.Locale;
 
 final class CasinoCommand implements TabExecutor {
 
-    private static final List<String> PLAYER_SUBS = List.of("cashier", "roulette", "slots", "derby", "wheel", "tp", "leave", "balance", "odds");
+    private static final List<String> PLAYER_SUBS = List.of("cashier", "roulette", "slots", "horses", "plinko", "wheel", "tp", "leave", "balance", "odds");
     private static final List<String> ADMIN_SUBS = List.of("build", "stats", "reload");
 
     private final ResourceCasinoPlugin plugin;
@@ -90,7 +90,7 @@ final class CasinoCommand implements TabExecutor {
                 plugin.tell(player, "<gray>Balance:</gray> " + String.join("<dark_gray>, </dark_gray>", parts));
             }
             case "cashier" -> new CashierMenu(plugin, player).open();
-            case "roulette", "slots", "derby", "wheel" -> {
+            case "roulette", "slots", "horses", "derby", "plinko", "wheel" -> {
                 if (!plugin.playAnywhere() && !plugin.casino().isCasinoWorld(player.getWorld())) {
                     plugin.tell(player, "<gray>Games are played on the casino floor: <yellow>/casino tp");
                     return true;
@@ -98,7 +98,8 @@ final class CasinoCommand implements TabExecutor {
                 Menu menu = switch (sub) {
                     case "roulette" -> new RouletteMenu(plugin, player);
                     case "slots" -> new SlotsMenu(plugin, player);
-                    case "derby" -> new DerbyMenu(plugin, player);
+                    case "horses", "derby" -> new HorseRaceMenu(plugin, player);
+                    case "plinko" -> new PlinkoMenu(plugin, player);
                     default -> new WheelMenu(plugin, player);
                 };
                 menu.open();

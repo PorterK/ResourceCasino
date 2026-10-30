@@ -19,7 +19,7 @@ import java.util.UUID;
  * In-server integration test, run by CI against a real Paper server:
  * {@code java -Dresourcecasino.selftest=true -jar paper.jar}.
  * Builds the casino floor, checks money handling and the house edge, spins the
- * big wheel and runs a duck race, then writes
+ * big wheel and the roulette wheel, runs a horse race and drops a Plinko ball, then writes
  * {@code plugins/ResourceCasino/selftest-result.txt} and shuts the server down.
  */
 final class SelfTest {
@@ -49,8 +49,10 @@ final class SelfTest {
             expect(plugin.wheel().expectedReturn() < 1, "wheel after reload pays too much");
         });
         step("big wheel spins to the result", this::checkBigWheel);
-        step("duck race on the track", this::checkRace);
-        Bukkit.getScheduler().runTaskLater(plugin, this::finish, 220L);
+        step("horse race on the track", this::checkRace);
+        step("roulette ball lands in the pocket", this::checkRouletteWheel);
+        step("plinko ball lands in its bin", this::checkPlinko);
+        Bukkit.getScheduler().runTaskLater(plugin, this::finish, 260L);
     }
 
     private void checkBuild() {
@@ -60,10 +62,14 @@ final class SelfTest {
         if (world == null) return;
         expect(plugin.data().built(), "built flag not set");
         int y = CasinoWorld.FLOOR;
-        expectBlock(world.getBlockAt(14, y + 1, 18), Material.SMOOTH_QUARTZ, "cashier counter");
-        expectBlock(world.getBlockAt(-11, y + 1, 0), Material.ENCHANTING_TABLE, "roulette wheel");
-        expectBlock(world.getBlockAt(0, y, DuckTrack.LANE_Z[2]), Material.WATER, "duck lane");
-        expectBlock(world.getBlockAt(-21, y + 2, 22), Material.DROPPER, "slot machine");
+        int h = CasinoWorld.HALF;
+        expectBlock(world.getBlockAt(22, y + 1, h - 7), Material.SMOOTH_QUARTZ, "cashier counter");
+        expectBlock(world.getBlockAt(-20, y, 0), Material.POLISHED_BLACKSTONE, "roulette bowl");
+        expectBlock(world.getBlockAt(5, y, -15), Material.DIRT_PATH, "racetrack");
+        expectBlock(world.getBlockAt(0, y, -25), Material.GRASS_BLOCK, "infield");
+        expectBlock(world.getBlockAt(-30, y + 2, h - 3), Material.DROPPER, "slot machine");
+        expectBlock(world.getBlockAt(PlinkoBoard.PEG_X, PlinkoBoard.pegY(0), PlinkoBoard.CENTER_Z), Material.END_ROD, "top plinko peg");
+        expectBlock(world.getBlockAt(PlinkoBoard.PEG_X, PlinkoBoard.pegY(7), PlinkoBoard.columnZ(7)), Material.END_ROD, "last plinko peg");
         expectBlock(world.getBlockAt(0, CasinoWorld.CEILING, 1), Material.BLACK_STAINED_GLASS, "ceiling");
         expectBlock(world.getBlockAt(CasinoWorld.HALF, y + 3, 1), Material.DARK_OAK_PLANKS, "wall");
         for (CasinoWorld.Station station : CasinoWorld.Station.values()) {
@@ -80,6 +86,7 @@ final class SelfTest {
         }
         expect(plugin.casino().stationAt(world.getBlockAt(0, y, 0)) == null, "plain floor shouldn't be a station");
         expect(plugin.casino().bigWheel().size() == plugin.wheel().size(), "big wheel has " + plugin.casino().bigWheel().size() + " segments");
+        expect(plugin.casino().rouletteWheel().present(), "roulette wheel missing");
         long cashiers = world.getEntitiesByClass(Villager.class).stream()
                 .filter(v -> CasinoWorld.ROLE_CASHIER.equals(plugin.casino().role(v))).count();
         expect(cashiers == 1, "expected 1 cashier, found " + cashiers);
@@ -164,11 +171,15 @@ final class SelfTest {
 
         paid = 0;
         for (int i = 0; i < rounds; i++) {
-            DuckDerby.Field field = DuckDerby.newField(random, plugin.derbyEdge());
-            int pick = random.nextInt(DuckDerby.DUCKS);
-            if (DuckDerby.pickWinner(field, random) == pick) paid += Payouts.apply(10, field.multiplier()[pick]);
+            HorseRace.Field field = HorseRace.newField(random, plugin.horseEdge());
+            int pick = random.nextInt(HorseRace.HORSES);
+            if (HorseRace.pickWinner(field, random) == pick) paid += Payouts.apply(10, field.multiplier()[pick]);
         }
-        report("duck derby", paid / (10.0 * rounds), 1 - plugin.derbyEdge());
+        report("horse racing", paid / (10.0 * rounds), 1 - plugin.horseEdge());
+
+        paid = 0;
+        for (int i = 0; i < rounds; i++) paid += Payouts.apply(10, Plinko.drop(random).multiplier());
+        report("plinko", paid / (10.0 * rounds), Plinko.expectedReturn());
     }
 
     private void report(String game, double observed, double expected) {
@@ -196,21 +207,72 @@ final class SelfTest {
     }
 
     private void checkRace() {
-        DuckTrack track = plugin.casino().track();
+        RaceTrack track = plugin.casino().track();
         int winner = 3;
-        DuckDerby.RacePlan plan = DuckDerby.plan(winner, 60, 20, new SplittableRandom(3));
+        HorseRace.RacePlan plan = HorseRace.plan(winner, 60, 20, new SplittableRandom(3));
         expect(track.run(plan), "track refused to run");
         expect(!track.run(plan), "two races on one track");
-        expect(track.duckCount() == DuckDerby.DUCKS, "expected 5 ducks, got " + track.duckCount());
+        expect(track.horseCount() == HorseRace.HORSES, "expected 5 horses, got " + track.horseCount());
         Bukkit.getScheduler().runTaskLater(plugin, () -> step("race finished", () -> {
-            expect(track.lastWinner() == winner, "duck " + track.lastWinner() + " crossed first, wanted " + winner);
+            expect(track.lastWinner() == winner, "horse " + track.lastWinner() + " crossed first, wanted " + winner);
             expect(track.finishedAt() == plan.raceFrames(), "winner crossed at frame " + track.finishedAt());
-            expect(Math.abs(track.duckX(winner) - DuckTrack.FINISH_X) < 0.01, "winner isn't on the line");
+            double[] line = RaceTrack.pointOnLap(winner, 1.0);
+            org.bukkit.Location at = track.horseLocation(winner);
+            expect(Math.abs(at.getX() - line[0]) < 0.01 && Math.abs(at.getZ() - line[1]) < 0.01,
+                    "winner isn't on the line: " + at.getX() + "," + at.getZ());
+            expect(Math.abs(line[0] - RaceTrack.CENTER_X) < 1e-6, "lap doesn't end at the finish line");
+            for (int lane = 0; lane < HorseRace.HORSES; lane++) {
+                for (double p = 0; p <= 1.0; p += 0.01) {
+                    double[] point = RaceTrack.pointOnLap(lane, p);
+                    double d = RaceTrack.distanceFromSpine(point[0], point[1]);
+                    if (Math.abs(d - RaceTrack.LANE_RADIUS[lane]) > 0.01) {
+                        failures.add("lane " + lane + " leaves its lane at " + p);
+                        break;
+                    }
+                }
+            }
         }), 70L);
-        Bukkit.getScheduler().runTaskLater(plugin, () -> step("ducks cleaned up", () -> {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> step("horses cleaned up", () -> {
             expect(!track.racing(), "race still running");
-            expect(track.duckCount() == 0, track.duckCount() + " ducks left on the track");
-        }), 175L);
+            expect(track.horseCount() == 0, track.horseCount() + " horses left on the track");
+        }), 200L);
+    }
+
+    private void checkRouletteWheel() {
+        RouletteWheel wheel = plugin.casino().rouletteWheel();
+        int pocket = 17;
+        expect(wheel.spin(pocket, 60), "roulette wheel refused to spin");
+        expect(!wheel.spin(5, 60), "roulette wheel spun twice at once");
+        Bukkit.getScheduler().runTaskLater(plugin, () -> step("roulette ball settled", () -> {
+            expect(wheel.ballPocket() == pocket, "ball says pocket " + wheel.ballPocket());
+            expect(wheel.pocketUnderBall() == pocket, "ball is over pocket " + wheel.pocketUnderBall() + ", wanted " + pocket);
+            expect(Math.abs(wheel.ballRadius() - RouletteWheel.POCKET_RADIUS) < 1e-6, "ball not down in the pockets");
+        }), 75L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> step("roulette wheel stopped", () ->
+                expect(!wheel.spinning(), "wheel still spinning")), 150L);
+    }
+
+    private void checkPlinko() {
+        PlinkoBoard board = plugin.casino().plinko();
+        boolean[] path = {true, true, false, true, true, true, false, true};
+        Plinko.Drop drop = new Plinko.Drop(path);
+        int bin = drop.bin();
+        expect(bin == 6, "drop counted bin " + bin);
+        double z = PlinkoBoard.position(plugin.casino().world(), drop, PlinkoBoard.landingTicks()).getZ();
+        expect(Math.abs(z - PlinkoBoard.binZ(bin)) < 1e-6, "ball path ends at z " + z + ", bin is at " + PlinkoBoard.binZ(bin));
+        for (int row = 0; row < Plinko.ROWS; row++) {
+            int offset = drop.offsetAfter(row);
+            Material peg = plugin.casino().world().getBlockAt(PlinkoBoard.PEG_X, PlinkoBoard.pegY(row), PlinkoBoard.columnZ(offset)).getType();
+            expect(peg == Material.END_ROD, "no peg under the ball at row " + row + " (found " + peg + ")");
+        }
+        expect(board.drop(drop), "board refused a ball");
+        expect(board.drop(Plinko.drop(new SplittableRandom(9))), "board refused a second ball");
+        expect(board.activeBalls() == 2, "expected 2 balls in play, got " + board.activeBalls());
+        Bukkit.getScheduler().runTaskLater(plugin, () -> step("plinko ball landed", () ->
+                expect(board.lastBin() >= 0, "no ball landed")), PlinkoBoard.landingTicks() + 3L);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> step("plinko balls cleared", () ->
+                expect(board.activeBalls() == 0, board.activeBalls() + " balls still on the board")),
+                PlinkoBoard.landingTicks() + PlinkoBoard.HOLD_TICKS + 10L);
     }
 
     private void expectBlock(Block block, Material material, String what) {

@@ -11,7 +11,7 @@ play-anywhere: true
 # Name of the casino floor world (a void world with the casino built in it).
 world-name: resourcecasino
 
-# Keep the casino floor loaded so the wheel, the cashier and the signs never vanish.
+# Keep the casino floor loaded so the wheels, the cashier and the signs never vanish.
 keep-casino-loaded: true
 
 # Biggest single bet, per resource. Roulette counts all chips on one spin.
@@ -25,10 +25,11 @@ max-bet:
 # Tell the whole server about wins of at least this many times the stake. 0 = never.
 announce-big-wins: 10
 
-duck-derby:
-  # Cut the house takes on every duck. 0.10 = odds pay 90% of fair.
+horse-racing:
+  # Cut the house takes on every horse. 0.10 = odds pay 90% of fair.
   house-edge: 0.10
-  race-seconds: 8
+  # How long one lap of the track takes.
+  race-seconds: 12
 
 wheel:
   # 24 multipliers, clockwise from the top. 0 = lose, 1 = stake back.

@@ -26,17 +26,19 @@ import java.util.Map;
 /**
  * The casino floor: a void world with one big hall built into it by code.
  * <pre>
- *            north (z -25)
- *   +-------------------------------+
- *   | ~~~~~~~ DUCK DERBY TRACK ~~~~ |   five water lanes, start west, finish east
- *   | ===== grandstand =====        |
- *   |                               |
- *   | ROULETTE     lobby    WHEEL ) |   the giant wheel hangs on the east wall
- *   |  table       kiosk    pedestals
- *   |                               |
- *   | SLOTS x5     spawn   CASHIER  |
- *   +-------------- exit -----------+
- *            south (z +25)
+ *                    north (z -40)
+ *   +---------------------------------------------+
+ *   |      ____________________________           |   oval racetrack, five lanes,
+ *   |     /       infield (trees)       \          |   finish line in front of the stands
+ *   |      ------------|---------------           |
+ *   |  $        ===== grandstand =====      $     |   $ = betting lecterns
+ *   |     ( roulette )                       ) W  |   W = giant wheel on the east wall
+ *   |     (  wheel   )      lobby kiosk      ) W  |
+ *   | P   o o o                                   |   P = Plinko board on the west wall
+ *   |                               [ cashier ]   |
+ *   |   S S S S S S S S S     spawn               |   S = slot machines
+ *   +-------------------- exit -------------------+
+ *                    south (z +40)
  * </pre>
  * Every block is placed from code, so {@code /casino build} always produces the same
  * hall. Clickable blocks ("stations") open the matching casino screen.
@@ -44,20 +46,23 @@ import java.util.Map;
 final class CasinoWorld {
 
     static final int FLOOR = 64;
-    static final int HALF = 25;
-    static final int CEILING = FLOOR + 14;
+    static final int HALF = 40;
+    static final int CEILING = FLOOR + 24;
 
-    enum Station { LOBBY, CASHIER, ROULETTE, SLOTS, DERBY, WHEEL, EXIT }
+    enum Station { LOBBY, CASHIER, ROULETTE, SLOTS, HORSES, PLINKO, WHEEL, EXIT }
 
     record Pos(int x, int y, int z) {}
 
-    static final String ROLE_TITLE = "title", ROLE_CASHIER = "cashier", ROLE_WHEEL = "wheel", ROLE_DUCK = "duck";
+    static final String ROLE_TITLE = "title", ROLE_CASHIER = "cashier", ROLE_WHEEL = "wheel", ROLE_HORSE = "horse",
+            ROLE_ROULETTE = "roulette", ROLE_PLINKO = "plinko";
 
     private final ResourceCasinoPlugin plugin;
     private final Map<Pos, Station> stations = new HashMap<>();
     private final Map<Station, Location> stationSpots = new EnumMap<>(Station.class);
     private final BigWheel bigWheel;
-    private final DuckTrack track;
+    private final RaceTrack track;
+    private final RouletteWheel rouletteWheel;
+    private final PlinkoBoard plinko;
     private World world;
     private BukkitTask upkeep;
 
@@ -68,14 +73,20 @@ final class CasinoWorld {
     CasinoWorld(ResourceCasinoPlugin plugin) {
         this.plugin = plugin;
         this.bigWheel = new BigWheel(plugin);
-        this.track = new DuckTrack(plugin);
+        this.track = new RaceTrack(plugin);
+        this.rouletteWheel = new RouletteWheel(plugin);
+        this.plinko = new PlinkoBoard(plugin);
     }
 
     World world() { return world; }
 
     BigWheel bigWheel() { return bigWheel; }
 
-    DuckTrack track() { return track; }
+    RaceTrack track() { return track; }
+
+    RouletteWheel rouletteWheel() { return rouletteWheel; }
+
+    PlinkoBoard plinko() { return plinko; }
 
     boolean isCasinoWorld(World other) {
         return world != null && other != null && other.getUID().equals(world.getUID());
@@ -94,7 +105,7 @@ final class CasinoWorld {
     }
 
     Location spawn() {
-        return new Location(world, 0.5, FLOOR + 1, 21.5, 180f, 0f);
+        return new Location(world, 0.5, FLOOR + 1, HALF - 3.5, 180f, 0f);
     }
 
     // ---- lifecycle -------------------------------------------------------------------------
@@ -115,10 +126,11 @@ final class CasinoWorld {
                 return false;
             }
         }
-        world.setSpawnLocation(0, FLOOR + 1, 21);
+        world.setSpawnLocation(0, FLOOR + 1, HALF - 4);
         if (plugin.keepLoaded()) {
-            for (int cx = -2; cx <= 1; cx++) {
-                for (int cz = -2; cz <= 1; cz++) world.setChunkForceLoaded(cx, cz, true);
+            int chunks = (HALF >> 4) + 1;
+            for (int cx = -chunks; cx < chunks; cx++) {
+                for (int cz = -chunks; cz < chunks; cz++) world.setChunkForceLoaded(cx, cz, true);
             }
         }
         keepItDaytime();
@@ -152,6 +164,7 @@ final class CasinoWorld {
             upkeep = null;
         }
         bigWheel.stop();
+        rouletteWheel.stop();
         track.reset();
         removeDecorations();
     }
@@ -189,7 +202,7 @@ final class CasinoWorld {
         ensureDecorations();
         if (!isCasinoWorld(player.getWorld())) plugin.data().setReturn(player.getUniqueId(), player.getLocation());
         player.teleportAsync(spawn()).thenAccept(ok -> {
-            if (ok) plugin.tell(player, "<gold>Welcome to the casino floor!</gold> <gray>Cashier on your left, slots on your right. <yellow>/casino leave</yellow> <gray>to go back.");
+            if (ok) plugin.tell(player, "<gold>Welcome to the casino floor!</gold> <gray>Slots on your left, cashier on your right. <yellow>/casino leave</yellow> <gray>to go back.");
         });
     }
 
@@ -253,7 +266,7 @@ final class CasinoWorld {
                     put(x, y, z, floor);
                 }
             }
-            // Walls: dark oak panels between log pillars, sea lanterns, gold trim on top.
+            // Walls: dark oak panels between log pillars, two rows of sea lanterns, gold trim on top.
             for (int x = -HALF; x <= HALF; x++) {
                 for (int z = -HALF; z <= HALF; z++) {
                     if (Math.abs(x) != HALF && Math.abs(z) != HALF) continue;
@@ -263,7 +276,7 @@ final class CasinoWorld {
                         if (wy <= y + 1) wall = Material.POLISHED_BLACKSTONE_BRICKS;
                         else if (wy == CEILING - 1) wall = Material.GOLD_BLOCK;
                         else if (Math.floorMod(along, 6) == 0) wall = Material.STRIPPED_DARK_OAK_LOG;
-                        else if (wy == y + 6 && Math.floorMod(along, 6) == 3) wall = Material.SEA_LANTERN;
+                        else if ((wy == y + 6 || wy == y + 14) && Math.floorMod(along, 6) == 3) wall = Material.SEA_LANTERN;
                         else wall = Material.DARK_OAK_PLANKS;
                         put(x, wy, z, wall);
                     }
@@ -278,54 +291,83 @@ final class CasinoWorld {
             }
             // Invisible light so the floor is bright everywhere.
             for (int x = -HALF + 3; x < HALF; x += 6) {
-                for (int z = -HALF + 3; z < HALF; z += 6) put(x, y + 4, z, "minecraft:light[level=15]");
+                for (int z = -HALF + 3; z < HALF; z += 6) {
+                    put(x, y + 4, z, "minecraft:light[level=15]");
+                    put(x, y + 13, z, "minecraft:light[level=15]");
+                }
             }
         }
 
-        buildDerby(y);
+        buildRacetrack(y);
         buildRoulette(y);
+        buildPlinko(y);
         buildWheel(y);
         buildSlots(y);
         buildCashier(y);
 
         // Lobby kiosk in the middle, exit by the spawn point.
         station(Station.LOBBY);
-        put(0, y + 1, 6, Material.GOLD_BLOCK);
-        put(0, y + 2, 6, Material.LODESTONE);
-        spot(Station.LOBBY, 0.5, y + 1, 7.5);
+        put(0, y + 1, 12, Material.GOLD_BLOCK);
+        put(0, y + 2, 12, Material.LODESTONE);
+        spot(Station.LOBBY, 0.5, y + 1, 14.5);
         station(Station.EXIT);
-        put(0, y + 1, 24, Material.CRYING_OBSIDIAN);
-        put(0, y + 2, 24, Material.CRYING_OBSIDIAN);
-        spot(Station.EXIT, 0.5, y + 1, 22.5);
+        put(0, y + 1, HALF - 1, Material.CRYING_OBSIDIAN);
+        put(0, y + 2, HALF - 1, Material.CRYING_OBSIDIAN);
+        spot(Station.EXIT, 0.5, y + 1, HALF - 2.5);
         current = null;
     }
 
-    private void buildDerby(int y) {
+    private void buildRacetrack(int y) {
         current = null;
-        int[] lanes = DuckTrack.LANE_Z;
+        int minX = (int) Math.floor(RaceTrack.CENTER_X - RaceTrack.STRAIGHT - RaceTrack.TRACK_OUTER - 1);
+        int maxX = (int) Math.ceil(RaceTrack.CENTER_X + RaceTrack.STRAIGHT + RaceTrack.TRACK_OUTER + 1);
+        int minZ = (int) Math.floor(RaceTrack.CENTER_Z - RaceTrack.TRACK_OUTER - 1);
+        int maxZ = (int) Math.ceil(RaceTrack.CENTER_Z + RaceTrack.TRACK_OUTER + 1);
+        int finishX = (int) Math.floor(RaceTrack.CENTER_X);
         if (placing) {
-            for (int x = -22; x <= 22; x++) {
-                for (int z = lanes[0] - 1; z <= lanes[lanes.length - 1] + 1; z++) {
-                    boolean lane = false;
-                    for (int laneZ : lanes) lane |= z == laneZ;
-                    boolean water = lane && x > -22 && x < 22;
-                    Material m;
-                    if (water) m = Material.WATER;
-                    else if (x == DuckTrack.FINISH_BLOCK_X) m = Math.floorMod(z, 2) == 0 ? Material.BLACK_CONCRETE : Material.WHITE_CONCRETE;
-                    else if (x == DuckTrack.START_BLOCK_X) m = Material.WHITE_CONCRETE;
-                    else m = Material.QUARTZ_BLOCK;
-                    put(x, y, z, m);
+            for (int x = minX; x <= maxX; x++) {
+                for (int z = minZ; z <= maxZ; z++) {
+                    double d = RaceTrack.distanceFromSpine(x + 0.5, z + 0.5);
+                    boolean southStraight = z + 0.5 > RaceTrack.CENTER_Z;
+                    if (d < RaceTrack.TRACK_INNER - 0.6) {
+                        put(x, y, z, Material.GRASS_BLOCK);
+                    } else if (d < RaceTrack.TRACK_INNER || (d > RaceTrack.TRACK_OUTER && d <= RaceTrack.TRACK_OUTER + 0.6)) {
+                        put(x, y, z, Material.SMOOTH_QUARTZ);
+                        if (x != finishX || !southStraight) put(x, y + 1, z, "minecraft:smooth_quartz_slab[type=bottom]");
+                    } else if (d <= RaceTrack.TRACK_OUTER) {
+                        if (x == finishX && southStraight) {
+                            put(x, y, z, Math.floorMod(z, 2) == 0 ? Material.BLACK_CONCRETE : Material.WHITE_CONCRETE);
+                        } else {
+                            put(x, y, z, Material.DIRT_PATH);
+                        }
+                    }
                 }
             }
-            // Checkered finish posts at both ends of the line.
-            for (int z : new int[]{lanes[0] - 1, lanes[lanes.length - 1] + 1}) {
-                for (int py = y + 1; py <= y + 3; py++) {
-                    put(DuckTrack.FINISH_BLOCK_X, py, z, Math.floorMod(py + z, 2) == 0 ? Material.BLACK_CONCRETE : Material.WHITE_CONCRETE);
+            // A few trees and flowers in the infield.
+            for (int x : new int[]{-10, 0, 10}) {
+                put(x, y + 1, (int) Math.floor(RaceTrack.CENTER_Z), Material.OAK_LOG);
+                put(x, y + 2, (int) Math.floor(RaceTrack.CENTER_Z), Material.OAK_LOG);
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        put(x + dx, y + 3, (int) Math.floor(RaceTrack.CENTER_Z) + dz, "minecraft:oak_leaves[persistent=true]");
+                    }
+                }
+                put(x, y + 4, (int) Math.floor(RaceTrack.CENTER_Z), "minecraft:oak_leaves[persistent=true]");
+            }
+            for (int x = -14; x <= 14; x += 4) {
+                put(x, y + 1, (int) Math.floor(RaceTrack.CENTER_Z) + 2, Material.POPPY);
+                put(x + 2, y + 1, (int) Math.floor(RaceTrack.CENTER_Z) - 2, Material.DANDELION);
+            }
+            // Checkered finish posts on both sides of the line.
+            for (double r : new double[]{RaceTrack.TRACK_INNER - 0.3, RaceTrack.TRACK_OUTER + 0.3}) {
+                int z = (int) Math.floor(RaceTrack.CENTER_Z + r);
+                for (int py = y + 1; py <= y + 4; py++) {
+                    put(finishX, py, z, Math.floorMod(py, 2) == 0 ? Material.BLACK_CONCRETE : Material.WHITE_CONCRETE);
                 }
             }
             // Grandstand, three rows rising to the south.
-            int front = lanes[lanes.length - 1] + 3;
-            for (int x = -17; x <= 17; x++) {
+            int front = maxZ + 1;
+            for (int x = -14; x <= 15; x++) {
                 for (int row = 0; row < 3; row++) {
                     int z = front + row;
                     for (int fill = 0; fill < row; fill++) put(x, y + 1 + fill, z, Material.DARK_OAK_PLANKS);
@@ -334,30 +376,79 @@ final class CasinoWorld {
             }
         }
         // Betting windows at both ends of the grandstand.
-        int z = lanes[lanes.length - 1] + 4;
-        station(Station.DERBY);
-        for (int x : new int[]{-20, 20}) {
+        station(Station.HORSES);
+        int z = maxZ + 2;
+        for (int x : new int[]{-17, 18}) {
             put(x, y + 1, z, Material.GOLD_BLOCK);
             put(x, y + 2, z, "minecraft:lectern[facing=north]");
         }
-        spot(Station.DERBY, 0.5, y + 4, lanes[lanes.length - 1] + 5.5);
+        spot(Station.HORSES, 0.5, y + 4, maxZ + 3.5);
         current = null;
     }
 
     private void buildRoulette(int y) {
         station(Station.ROULETTE);
-        for (int x = -15; x <= -7; x++) {
-            for (int z = -3; z <= 3; z++) {
-                boolean edge = x == -15 || x == -7 || z == -3 || z == 3;
-                Material m;
-                if (edge) m = Material.DARK_OAK_PLANKS;
-                else if (x == -11 && z == 0) m = Material.ENCHANTING_TABLE;
-                else if (z == 0) m = Math.floorMod(x, 2) == 0 ? Material.RED_WOOL : Material.BLACK_WOOL;
-                else m = Material.GREEN_WOOL;
-                put(x, y + 1, z, m);
+        double cx = RouletteWheel.CENTER_X, cz = RouletteWheel.CENTER_Z;
+        for (int x = (int) Math.floor(cx - 8); x <= (int) Math.ceil(cx + 8); x++) {
+            for (int z = (int) Math.floor(cz - 8); z <= (int) Math.ceil(cz + 8); z++) {
+                double d = Math.hypot(x + 0.5 - cx, z + 0.5 - cz);
+                if (d <= RouletteWheel.RIM_RADIUS + 0.35) {
+                    put(x, y, z, d <= RouletteWheel.LABEL_RADIUS - 0.6 ? Material.POLISHED_BLACKSTONE : Material.BLACK_CONCRETE);
+                } else if (d <= RouletteWheel.RIM_RADIUS + 1.35) {
+                    put(x, y, z, Material.POLISHED_BLACKSTONE);
+                    put(x, y + 1, z, "minecraft:dark_oak_slab[type=bottom]");
+                } else if (d <= RouletteWheel.RIM_RADIUS + 2.2 && placing) {
+                    Station keep = current;
+                    current = null;
+                    put(x, y, z, Material.GOLD_BLOCK);
+                    current = keep;
+                }
             }
         }
-        spot(Station.ROULETTE, -10.5, y + 1, 5.5);
+        spot(Station.ROULETTE, cx, y + 1, cz + 8.5);
+        current = null;
+    }
+
+    private void buildPlinko(int y) {
+        current = null;
+        int wall = -HALF;
+        int peg = PlinkoBoard.PEG_X;
+        int cz = PlinkoBoard.CENTER_Z;
+        int half = Plinko.ROWS + 3;
+        if (placing) {
+            // Black backboard set into the wall, framed in gold.
+            for (int z = cz - half; z <= cz + half; z++) {
+                for (int wy = y + 1; wy < CEILING - 1; wy++) {
+                    boolean frame = z == cz - half || z == cz + half || wy == CEILING - 2;
+                    put(wall, wy, z, frame ? Material.GOLD_BLOCK : Material.BLACK_CONCRETE);
+                }
+            }
+            // The release chute at the top.
+            put(peg, PlinkoBoard.pegY(0) + 4, cz, "minecraft:dispenser[facing=down]");
+            // Pegs: row r has r+1 pegs, two blocks apart, staggered.
+            for (int row = 0; row < Plinko.ROWS; row++) {
+                for (int offset = -row; offset <= row; offset += 2) {
+                    put(peg, PlinkoBoard.pegY(row), PlinkoBoard.columnZ(offset), "minecraft:end_rod[facing=east]");
+                }
+            }
+        }
+        // Bins (coloured by payout) and the dividers between them are clickable too.
+        station(Station.PLINKO);
+        for (int offset = -Plinko.ROWS - 1; offset <= Plinko.ROWS + 1; offset++) {
+            int z = PlinkoBoard.columnZ(offset);
+            if (Math.floorMod(offset, 2) == 1) {
+                for (int wy = y + 1; wy <= y + 3; wy++) put(peg, wy, z, Material.QUARTZ_PILLAR);
+            } else {
+                int bin = (offset + Plinko.ROWS) / 2;
+                Material color = Items.material(PlinkoMenu.binDye(Plinko.MULTIPLIERS[bin]) + "_CONCRETE");
+                put(peg, y + 1, z, color);
+            }
+        }
+        for (int z : new int[]{cz - 4, cz, cz + 4}) {
+            put(peg + 5, y + 1, z, Material.GOLD_BLOCK);
+            put(peg + 5, y + 2, z, Material.TARGET);
+        }
+        spot(Station.PLINKO, peg + 7.5, y + 1, cz + 0.5);
         current = null;
     }
 
@@ -365,8 +456,9 @@ final class CasinoWorld {
         current = null;
         if (placing) {
             // Round black backboard with a gold rim on the east wall.
+            int reach = (int) Math.ceil(BigWheel.RADIUS + 2);
             for (int wy = y + 1; wy < CEILING; wy++) {
-                for (int z = -7; z <= 7; z++) {
+                for (int z = -reach; z <= reach; z++) {
                     double d = Math.hypot(wy + 0.5 - BigWheel.CENTER_Y, z + 0.5 - BigWheel.CENTER_Z);
                     if (d <= BigWheel.RADIUS + 1.0) put(HALF - 1, wy, z, Material.BLACK_CONCRETE);
                     else if (d <= BigWheel.RADIUS + 1.8) put(HALF - 1, wy, z, Material.GOLD_BLOCK);
@@ -375,35 +467,37 @@ final class CasinoWorld {
         }
         station(Station.WHEEL);
         for (int z : new int[]{-3, 0, 3}) {
-            put(18, y + 1, z, Material.CHISELED_QUARTZ_BLOCK);
-            put(18, y + 2, z, Material.GOLD_BLOCK);
+            put(HALF - 7, y + 1, z, Material.CHISELED_QUARTZ_BLOCK);
+            put(HALF - 7, y + 2, z, Material.GOLD_BLOCK);
         }
-        spot(Station.WHEEL, 16.5, y + 1, 0.5);
+        spot(Station.WHEEL, HALF - 8.5, y + 1, 0.5);
         current = null;
     }
 
     private void buildSlots(int y) {
         station(Station.SLOTS);
-        for (int x = -21; x <= -13; x += 2) {
-            put(x, y + 1, 22, Material.GOLD_BLOCK);
-            put(x, y + 2, 22, "minecraft:dropper[facing=north]");
-            put(x, y + 3, 22, Material.SEA_LANTERN);
-            put(x + 1, y + 2, 22, "minecraft:lever[face=wall,facing=east]");
+        int z = HALF - 3;
+        for (int x = -30; x <= -14; x += 2) {
+            put(x, y + 1, z, Material.GOLD_BLOCK);
+            put(x, y + 2, z, "minecraft:dropper[facing=north]");
+            put(x, y + 3, z, Material.SEA_LANTERN);
+            put(x + 1, y + 2, z, "minecraft:lever[face=wall,facing=east]");
         }
-        spot(Station.SLOTS, -16.5, y + 1, 20.5);
+        spot(Station.SLOTS, -21.5, y + 1, z - 1.5);
         current = null;
     }
 
     private void buildCashier(int y) {
         station(Station.CASHIER);
-        for (int x = 14; x <= 21; x++) put(x, y + 1, 18, Material.SMOOTH_QUARTZ);
-        for (int z = 19; z <= 21; z++) {
-            put(14, y + 1, z, Material.SMOOTH_QUARTZ);
-            put(21, y + 1, z, Material.SMOOTH_QUARTZ);
+        int front = HALF - 7;
+        for (int x = 22; x <= 29; x++) put(x, y + 1, front, Material.SMOOTH_QUARTZ);
+        for (int z = front + 1; z <= front + 3; z++) {
+            put(22, y + 1, z, Material.SMOOTH_QUARTZ);
+            put(29, y + 1, z, Material.SMOOTH_QUARTZ);
         }
-        put(14, y + 2, 18, Material.GOLD_BLOCK);
-        put(21, y + 2, 18, Material.GOLD_BLOCK);
-        spot(Station.CASHIER, 17.5, y + 1, 16.5);
+        put(22, y + 2, front, Material.GOLD_BLOCK);
+        put(29, y + 2, front, Material.GOLD_BLOCK);
+        spot(Station.CASHIER, 25.5, y + 1, front - 1.5);
         current = null;
     }
 
@@ -424,6 +518,8 @@ final class CasinoWorld {
     void removeDecorations() {
         if (world == null) return;
         bigWheel.forget();
+        rouletteWheel.forget();
+        track.reset();
         for (Entity entity : world.getEntities()) {
             if (!(entity instanceof Player) && isCasinoEntity(entity)) entity.remove();
         }
@@ -433,30 +529,39 @@ final class CasinoWorld {
         if (world == null) return;
         removeDecorations();
         int y = FLOOR;
-        title(0.5, y + 6.5, 6.5, "<gold><bold>RESOURCE CASINO", 3.0f);
-        title(0.5, y + 5.3, 6.5, "<gray>Iron • Copper • Emerald • Diamond • Netherite", 1.2f);
-        title(0.5, y + 3.4, 6.5, "<yellow>Click the lodestone for the casino menu", 0.8f);
-        title(-10.5, y + 4.2, 0.5, "<red><bold>ROULETTE", 2.2f);
-        title(-10.5, y + 3.4, 0.5, "<gray>Click the table", 0.8f);
-        title(-16.5, y + 5.4, 22.5, "<yellow><bold>SLOTS", 2.2f);
-        title(-16.5, y + 4.6, 22.5, "<gray>Click a machine", 0.8f);
-        title(17.5, y + 4.4, 19.5, "<gold><bold>CASHIER", 2.2f);
-        title(17.5, y + 3.6, 19.5, "<gray>Deposit & withdraw", 0.8f);
-        title(18.5, y + 4.2, 0.5, "<light_purple><bold>SPIN THE WHEEL", 1.8f);
-        title(18.5, y + 3.5, 0.5, "<gray>Click a pedestal", 0.8f);
-        int[] lanes = DuckTrack.LANE_Z;
-        double mid = (lanes[0] + lanes[lanes.length - 1]) / 2.0 + 0.5;
-        title(0.5, y + 7.5, mid, "<aqua><bold>DUCK DERBY", 3.0f);
-        title(0.5, y + 6.3, mid, "<gray>Bet at the lecterns by the grandstand", 1.0f);
-        title(DuckTrack.FINISH_BLOCK_X + 0.5, y + 4.5, mid, "<white><bold>FINISH", 1.6f);
-        title(DuckTrack.START_BLOCK_X + 0.5, y + 3.0, mid, "<white><bold>START", 1.2f);
-        for (int lane = 0; lane < lanes.length; lane++) {
-            title(-22.0, y + 1.6, lanes[lane] + 0.5, DerbyMenu.duckName(lane), 0.7f);
-        }
-        for (int x : new int[]{-20, 20}) title(x + 0.5, y + 3.6, lanes[lanes.length - 1] + 4.5, "<aqua>Duck Derby bets", 0.9f);
-        title(0.5, y + 3.4, 24.5, "<green><bold>EXIT", 1.2f);
+        title(0.5, y + 7.5, 12.5, "<gold><bold>RESOURCE CASINO", 3.5f);
+        title(0.5, y + 6.2, 12.5, "<gray>Iron • Copper • Emerald • Diamond • Netherite", 1.3f);
+        title(0.5, y + 3.4, 12.5, "<yellow>Click the lodestone for the casino menu", 0.8f);
 
-        Location cashierSpot = new Location(world, 17.5, y + 1, 20.5, 180f, 0f);
+        title(RouletteWheel.CENTER_X, y + 6.0, RouletteWheel.CENTER_Z, "<red><bold>ROULETTE", 2.6f);
+        title(RouletteWheel.CENTER_X, y + 5.1, RouletteWheel.CENTER_Z, "<gray>Click the rim to place your bets", 0.9f);
+
+        int cz = PlinkoBoard.CENTER_Z;
+        title(PlinkoBoard.PEG_X + 5.5, y + 4.4, cz + 0.5, "<aqua><bold>PLINKO", 2.4f);
+        title(PlinkoBoard.PEG_X + 5.5, y + 3.6, cz + 0.5, "<gray>Click a pedestal to drop a ball", 0.8f);
+        for (int bin = 0; bin < Plinko.BINS; bin++) {
+            double m = Plinko.MULTIPLIERS[bin];
+            title(PlinkoBoard.BALL_X + 0.2, y + 2.6, PlinkoBoard.binZ(bin),
+                    "<" + Items.hex(PlinkoMenu.binRgb(m)) + "><bold>" + Payouts.format(m), 0.9f);
+        }
+
+        title(-21.5, y + 5.4, HALF - 2.5, "<yellow><bold>SLOTS", 2.4f);
+        title(-21.5, y + 4.6, HALF - 2.5, "<gray>Click a machine", 0.8f);
+        title(25.5, y + 4.4, HALF - 6.5, "<gold><bold>CASHIER", 2.4f);
+        title(25.5, y + 3.6, HALF - 6.5, "<gray>Deposit & withdraw", 0.8f);
+        title(HALF - 6.5, y + 4.2, 0.5, "<light_purple><bold>SPIN THE WHEEL", 2.0f);
+        title(HALF - 6.5, y + 3.5, 0.5, "<gray>Click a pedestal", 0.8f);
+
+        title(RaceTrack.CENTER_X, y + 9.0, RaceTrack.CENTER_Z, "<gold><bold>HORSE RACING", 4.0f);
+        title(RaceTrack.CENTER_X, y + 7.6, RaceTrack.CENTER_Z, "<gray>Bet at the lecterns by the grandstand", 1.2f);
+        title(Math.floor(RaceTrack.CENTER_X) + 0.5, y + 5.6, RaceTrack.CENTER_Z + (RaceTrack.TRACK_INNER + RaceTrack.TRACK_OUTER) / 2,
+                "<white><bold>FINISH", 2.0f);
+        double stands = RaceTrack.CENTER_Z + RaceTrack.TRACK_OUTER + 3.5;
+        title(-16.5, y + 3.6, stands, "<gold>Horse Racing bets", 0.9f);
+        title(18.5, y + 3.6, stands, "<gold>Horse Racing bets", 0.9f);
+        title(0.5, y + 3.4, HALF - 0.5, "<green><bold>EXIT", 1.2f);
+
+        Location cashierSpot = new Location(world, 25.5, y + 1, HALF - 4.5, 180f, 0f);
         world.spawn(cashierSpot, Villager.class, villager -> {
             villager.setAI(false);
             villager.setInvulnerable(true);
@@ -470,6 +575,7 @@ final class CasinoWorld {
         });
 
         bigWheel.spawn(world);
+        rouletteWheel.spawn(world);
     }
 
     TextDisplay title(double x, double y, double z, String text, float scale) {

@@ -56,7 +56,7 @@ class PluginDescriptorTest {
         for (Resource r : Resource.values()) {
             assertTrue(config.getLong("max-bet." + r.configKey()) > 0, "no max bet for " + r);
         }
-        double edge = config.getDouble("duck-derby.house-edge");
+        double edge = config.getDouble("horse-racing.house-edge");
         assertTrue(edge > 0 && edge < 0.5);
         assertTrue(config.getBoolean("play-anywhere"));
     }

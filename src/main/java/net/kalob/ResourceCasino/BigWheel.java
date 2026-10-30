@@ -24,9 +24,9 @@ import java.util.List;
 final class BigWheel {
 
     static final double CENTER_X = CasinoWorld.HALF - 1.55;
-    static final double CENTER_Y = CasinoWorld.FLOOR + 7.5;
+    static final double CENTER_Y = CasinoWorld.FLOOR + 9.5;
     static final double CENTER_Z = 0.5;
-    static final double RADIUS = 4.0;
+    static final double RADIUS = 5.0;
 
     private final ResourceCasinoPlugin plugin;
     private final List<TextDisplay> segments = new ArrayList<>();
@@ -76,7 +76,7 @@ final class BigWheel {
                 d.setBrightness(new Display.Brightness(15, 15));
                 d.setLineWidth(60);
                 d.setTransformation(new Transformation(new Vector3f(), new Quaternionf(),
-                        new Vector3f(2.4f, 2.4f, 2.4f), new Quaternionf()));
+                        new Vector3f(2.9f, 2.9f, 2.9f), new Quaternionf()));
                 d.setTeleportDuration(2);
                 d.setPersistent(false);
                 plugin.casino().tag(d, CasinoWorld.ROLE_WHEEL);

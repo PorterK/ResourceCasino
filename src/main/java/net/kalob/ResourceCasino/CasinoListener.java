@@ -72,7 +72,8 @@ final class CasinoListener implements Listener {
             case CASHIER -> new CashierMenu(plugin, player);
             case ROULETTE -> new RouletteMenu(plugin, player);
             case SLOTS -> new SlotsMenu(plugin, player);
-            case DERBY -> new DerbyMenu(plugin, player);
+            case HORSES -> new HorseRaceMenu(plugin, player);
+            case PLINKO -> new PlinkoMenu(plugin, player);
             case WHEEL -> new WheelMenu(plugin, player);
             case EXIT -> null;
         };

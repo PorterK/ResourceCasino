@@ -232,6 +232,9 @@ final class RouletteMenu extends GameMenu {
             stepTicks.add((int) Math.round(t));
         }
         int end = stepTicks.getLast();
+        if (plugin.casino().rouletteWheel().spin(pocket, end + 6) && !plugin.casino().isCasinoWorld(player.getWorld())) {
+            plugin.tell(player, "<red>Roulette:</red> <gray>your ball is spinning on the real wheel on the casino floor.");
+        }
         int[] step = {0};
         animate(tick -> {
             while (step[0] <= steps && stepTicks.get(step[0]) <= tick) {
