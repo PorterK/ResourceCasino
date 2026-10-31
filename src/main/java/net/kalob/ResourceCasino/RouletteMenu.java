@@ -170,6 +170,7 @@ final class RouletteMenu extends GameMenu {
                     return;
                 }
                 prefs.resource = click.isRightClick() ? prefs.resource.previous() : prefs.resource.next();
+                if (balance() < chip()) chipIndex = 0;
             }
             case CHIP -> chipIndex = click.isRightClick() ? Math.max(0, chipIndex - 1) : Math.min(CHIPS.length - 1, chipIndex + 1);
             case CLEAR -> bets.clear();

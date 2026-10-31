@@ -24,7 +24,8 @@ abstract class GameMenu extends Menu {
     GameMenu(ResourceCasinoPlugin plugin, Player player, String title) {
         super(plugin, player, 6, title);
         this.prefs = plugin.prefs(player.getUniqueId());
-        prefs.stake = clampStake(prefs.stake);
+        // Every game starts at a bet of 1. The resource you last bet with is remembered.
+        prefs.stake = 1;
     }
 
     Resource resource() { return prefs.resource; }
@@ -78,7 +79,8 @@ abstract class GameMenu extends Menu {
         switch (slot) {
             case RESOURCE -> {
                 prefs.resource = click.isRightClick() ? prefs.resource.previous() : prefs.resource.next();
-                prefs.stake = clampStake(prefs.stake);
+                // Can't cover the current bet in the new resource? Start it back at 1.
+                prefs.stake = balance() < prefs.stake ? 1 : clampStake(prefs.stake);
             }
             case MINUS_10 -> prefs.stake = clampStake(prefs.stake - (click.isShiftClick() ? 64 : 10));
             case MINUS_1 -> prefs.stake = clampStake(prefs.stake - 1);
