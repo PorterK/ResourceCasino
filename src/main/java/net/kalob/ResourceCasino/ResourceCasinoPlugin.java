@@ -49,7 +49,12 @@ public final class ResourceCasinoPlugin extends JavaPlugin {
     /** What a player last chose to bet with, so every game remembers it. */
     static final class Prefs {
         Resource resource = Resource.IRON;
-        long stake = 1;
+        /** Each resource remembers its own bet, so switching never turns 5 iron into 5 netherite. */
+        private final Map<Resource, Long> stakes = new EnumMap<>(Resource.class);
+
+        long stake() { return stakes.getOrDefault(resource, 1L); }
+
+        void setStake(long stake) { stakes.put(resource, stake); }
     }
 
     /** A bet that's been paid for but whose animation hasn't finished yet. */

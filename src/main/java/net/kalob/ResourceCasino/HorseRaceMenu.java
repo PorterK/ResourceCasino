@@ -36,7 +36,6 @@ final class HorseRaceMenu extends GameMenu {
     List<String> actionLore() {
         if (pick < 0) return List.of("<gray>Click a horse on the left first");
         return List.of("<gray>Backing " + horseName(pick),
-                "<gray>Bet " + Items.amount(resource(), stake()),
                 "<gray>Wins " + Items.amount(resource(), Payouts.apply(stake(), field.multiplier()[pick])));
     }
 

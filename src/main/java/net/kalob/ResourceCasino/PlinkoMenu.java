@@ -30,8 +30,7 @@ final class PlinkoMenu extends GameMenu {
 
     @Override
     List<String> actionLore() {
-        return List.of("<gray>Bet " + Items.amount(resource(), stake()),
-                "<gray>Best bin pays " + Items.amount(resource(), Payouts.apply(stake(), Plinko.MULTIPLIERS[0])));
+        return List.of("<gray>Best bin pays " + Items.amount(resource(), Payouts.apply(stake(), Plinko.MULTIPLIERS[0])));
     }
 
     static String binDye(double multiplier) {

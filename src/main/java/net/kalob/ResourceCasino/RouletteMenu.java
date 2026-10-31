@@ -29,7 +29,6 @@ final class RouletteMenu extends GameMenu {
     static final int ZERO = 36, DOZEN_1 = 37, DOZEN_2 = 38, DOZEN_3 = 39, RED = 40, BLACK = 41, ODD = 42, EVEN = 43,
             HISTORY = 44, LOW = 45, HIGH = 46, RESOURCE_SLOT = 47, CHIP = 48, TOTAL = 49, CLEAR = 50, REBET = 51;
 
-    private static final long[] CHIPS = {1, 2, 5, 10, 25, 50, 100};
 
     private final Map<Roulette.Bet, Long> bets = new LinkedHashMap<>();
     private Map<Roulette.Bet, Long> lastBets = Map.of();
@@ -48,7 +47,10 @@ final class RouletteMenu extends GameMenu {
     @Override
     Material actionIcon() { return Material.CLOCK; }
 
-    long chip() { return CHIPS[chipIndex]; }
+    long chip() {
+        long[] chips = chips();
+        return chips[Math.min(chipIndex, chips.length - 1)];
+    }
 
     long total() {
         long sum = 0;
@@ -99,8 +101,9 @@ final class RouletteMenu extends GameMenu {
         set(RESOURCE_SLOT, Items.icon(Items.unit(r), 1, true, "<gray>Betting with</gray> <" + Items.hex(r.color()) + "><bold>" + r.displayName(),
                 List.of("<gray>Balance: " + Items.amount(r, balance()),
                         total() > 0 ? "<red>Clear your bets to switch" : "<yellow>Click</yellow> <gray>to switch resource")));
-        set(CHIP, Items.icon(Material.SUNFLOWER, (int) Math.min(64, chip()), false, "<yellow>Chip: " + Items.amount(r, chip()),
-                List.of("<yellow>Click</yellow> <gray>bigger chip", "<yellow>Right-click</yellow> <gray>smaller chip")));
+        set(CHIP, Items.icon(Items.unit(r), (int) Math.min(64, chip()), true, "<yellow>Chip: " + Items.amount(r, chip()),
+                List.of("<gray>Each click on the table drops one chip.", "",
+                        "<yellow>Click</yellow> <gray>bigger chip", "<yellow>Right-click</yellow> <gray>smaller chip")));
         set(TOTAL, Items.icon(Material.GOLD_INGOT, 1, total() > 0, "<white>On the table: " + Items.amount(r, total()),
                 List.of("<gray>Table limit: " + Items.amount(r, plugin.maxBet(r)))));
         set(CLEAR, Items.icon(Material.BUCKET, "<red>Clear bets"));
@@ -170,8 +173,9 @@ final class RouletteMenu extends GameMenu {
                     return;
                 }
                 prefs.resource = click.isRightClick() ? prefs.resource.previous() : prefs.resource.next();
+                chipIndex = 0;
             }
-            case CHIP -> chipIndex = click.isRightClick() ? Math.max(0, chipIndex - 1) : Math.min(CHIPS.length - 1, chipIndex + 1);
+            case CHIP -> chipIndex = click.isRightClick() ? Math.max(0, chipIndex - 1) : Math.min(chips().length - 1, chipIndex + 1);
             case CLEAR -> bets.clear();
             case REBET -> {
                 if (!lastBets.isEmpty()) {

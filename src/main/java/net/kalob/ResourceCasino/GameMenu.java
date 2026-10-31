@@ -10,31 +10,37 @@ import java.util.List;
 /**
  * A six-row game screen with the shared betting bar along the bottom:
  * <pre>
- * [resource][-10][-1][ bet ][+1][+10][max][lobby][ PLAY ]
- *     45     46   47   48    49   50   51   52     53
+ * [resource][chip][chip][chip][chip][chip][chip][lobby][ PLAY ]
+ *     45     46 ......................... 51    52      53
  * </pre>
+ * Click a chip to make that your bet. Each chip is a stack of the resource you're
+ * betting, so the stack size is the bet. The chips scale to each resource's table
+ * limit, and each resource remembers its own bet.
  */
 abstract class GameMenu extends Menu {
 
-    static final int RESOURCE = 45, MINUS_10 = 46, MINUS_1 = 47, STAKE = 48, PLUS_1 = 49, PLUS_10 = 50,
-            MAX = 51, LOBBY = 52, ACTION = 53;
+    static final int RESOURCE = 45, FIRST_CHIP = 46, LOBBY = 52, ACTION = 53;
 
     protected final ResourceCasinoPlugin.Prefs prefs;
 
     GameMenu(ResourceCasinoPlugin plugin, Player player, String title) {
         super(plugin, player, 6, title);
         this.prefs = plugin.prefs(player.getUniqueId());
-        prefs.stake = clampStake(prefs.stake);
+        prefs.setStake(clampStake(prefs.stake()));
     }
 
     Resource resource() { return prefs.resource; }
 
-    long stake() { return prefs.stake; }
+    long stake() { return prefs.stake(); }
 
     long balance() { return plugin.balance(player.getUniqueId(), prefs.resource); }
 
     long clampStake(long stake) {
         return Math.max(1, Math.min(plugin.maxBet(prefs.resource), stake));
+    }
+
+    long[] chips() {
+        return BetChips.forLimit(plugin.maxBet(prefs.resource));
     }
 
     /** Name of the big button in slot 53 ("SPIN", "PULL", "START RACE"). */
@@ -47,59 +53,79 @@ abstract class GameMenu extends Menu {
 
     /** Extra lines under the action button. */
     List<String> actionLore() {
-        return List.of("<gray>Bet " + Items.amount(prefs.resource, prefs.stake) + "</gray>");
+        return List.of();
     }
 
     void renderBetBar() {
         Resource r = prefs.resource;
-        set(RESOURCE, Items.icon(Items.unit(r), 1, true, "<gray>Betting with</gray> <" + Items.hex(r.color()) + "><bold>" + r.displayName(),
+        set(RESOURCE, Items.icon(Items.block(r), 1, true, "<gray>Betting with</gray> <" + Items.hex(r.color()) + "><bold>" + r.displayName(),
                 List.of("<gray>Balance: " + Items.amount(r, balance()),
                         "",
                         "<yellow>Click</yellow> <gray>next resource",
                         "<yellow>Right-click</yellow> <gray>previous resource")));
-        set(MINUS_10, Items.icon(Material.RED_STAINED_GLASS_PANE, "<red><bold>-10", "<gray>Shift-click: -64"));
-        set(MINUS_1, Items.icon(Material.RED_STAINED_GLASS_PANE, "<red><bold>-1"));
-        set(STAKE, Items.icon(Items.unit(r), (int) Math.min(64, prefs.stake), false, "<white>Bet: " + Items.amount(r, prefs.stake),
-                List.of("<gray>Table limit: " + Items.amount(r, plugin.maxBet(r)))));
-        set(PLUS_1, Items.icon(Material.LIME_STAINED_GLASS_PANE, "<green><bold>+1"));
-        set(PLUS_10, Items.icon(Material.LIME_STAINED_GLASS_PANE, "<green><bold>+10", "<gray>Shift-click: +64"));
-        set(MAX, Items.icon(Material.GOLD_NUGGET, "<gold>Max bet", "<gray>As much as you can, up to the limit"));
+        renderChips(FIRST_CHIP, "<gray>Click to bet this much");
         set(LOBBY, Items.icon(Material.DARK_OAK_DOOR, "<gray>Back to the lobby"));
-        List<String> lore = new ArrayList<>(actionLore());
-        if (balance() < prefs.stake) {
+        List<String> lore = new ArrayList<>();
+        lore.add("<gray>Your bet: " + Items.amount(r, stake()));
+        lore.addAll(actionLore());
+        if (balance() < stake()) {
             lore.add("");
             lore.add("<red>Not enough " + r.displayName() + " - visit the cashier");
         }
-        set(ACTION, Items.icon(actionIcon(), 1, true, "<gold><bold>" + actionName(), lore));
+        set(ACTION, Items.icon(actionIcon(), 1, true, "<gold><bold>" + actionName() + " <gray>(" + stake() + " " + r.displayName() + ")", lore));
+    }
+
+    /**
+     * Draws the six chips starting at {@code first}. The chosen one glows; ones you can't
+     * afford are shown but marked. The stack size is the chip's value (names say it past 64).
+     */
+    void renderChips(int first, String hint) {
+        Resource r = prefs.resource;
+        long[] chips = chips();
+        long balance = balance();
+        for (int i = 0; i < BetChips.MAX_CHIPS; i++) {
+            if (i >= chips.length) {
+                set(first + i, Items.filler(Material.GRAY_STAINED_GLASS_PANE));
+                continue;
+            }
+            long value = chips[i];
+            boolean chosen = value == stake();
+            boolean affordable = value <= balance;
+            List<String> lore = new ArrayList<>();
+            lore.add(chosen ? "<green>Your current bet" : hint);
+            if (!affordable) lore.add("<red>You have " + balance + " " + r.displayName());
+            set(first + i, Items.icon(affordable || chosen ? Items.unit(r) : Material.GRAY_DYE, (int) Math.min(64, value), chosen,
+                    (chosen ? "<green><bold>▶ " : "<white>") + "Bet " + Items.amount(r, value), lore));
+        }
     }
 
     /** Handles a click on the betting bar. Returns true if the click was for the bar. */
     boolean clickBetBar(int slot, ClickType click) {
+        if (slot >= FIRST_CHIP && slot < FIRST_CHIP + BetChips.MAX_CHIPS) {
+            long[] chips = chips();
+            int index = slot - FIRST_CHIP;
+            if (index >= chips.length) return true;
+            prefs.setStake(chips[index]);
+            sound("block.chain.place", 0.5f, 1.6f + index * 0.08f);
+            render();
+            return true;
+        }
         switch (slot) {
             case RESOURCE -> {
                 prefs.resource = click.isRightClick() ? prefs.resource.previous() : prefs.resource.next();
-                prefs.stake = clampStake(prefs.stake);
+                prefs.setStake(clampStake(prefs.stake()));
+                clickSound();
+                render();
             }
-            case MINUS_10 -> prefs.stake = clampStake(prefs.stake - (click.isShiftClick() ? 64 : 10));
-            case MINUS_1 -> prefs.stake = clampStake(prefs.stake - 1);
-            case PLUS_1 -> prefs.stake = clampStake(prefs.stake + 1);
-            case PLUS_10 -> prefs.stake = clampStake(prefs.stake + (click.isShiftClick() ? 64 : 10));
-            case MAX -> prefs.stake = clampStake(Math.max(1, balance()));
             case LOBBY -> {
                 clickSound();
                 switchTo(new LobbyMenu(plugin, player));
-                return true;
             }
-            case ACTION -> {
-                play();
-                return true;
-            }
+            case ACTION -> play();
             default -> {
                 return false;
             }
         }
-        clickSound();
-        render();
         return true;
     }
 

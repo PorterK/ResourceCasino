@@ -132,4 +132,21 @@ class GamesTest {
             for (int row = 0; row <= Plinko.ROWS; row++) assertTrue(Math.abs(drop.offsetAfter(row)) <= row);
         }
     }
+
+    @Test
+    void betChipsScaleToTheTableLimit() {
+        assertArrayEquals(new long[]{1, 16, 32, 64, 128, 256}, BetChips.forLimit(256));
+        assertArrayEquals(new long[]{1, 8, 16, 32, 64, 128}, BetChips.forLimit(128));
+        assertArrayEquals(new long[]{1, 4, 8, 16, 32, 64}, BetChips.forLimit(64));
+        assertArrayEquals(new long[]{1, 2, 4, 8, 16, 32}, BetChips.forLimit(32));
+        assertArrayEquals(new long[]{1, 2, 3, 4, 6, 8}, BetChips.forLimit(8));
+        assertArrayEquals(new long[]{1}, BetChips.forLimit(1));
+        for (long limit = 1; limit <= 1000; limit++) {
+            long[] chips = BetChips.forLimit(limit);
+            assertEquals(1, chips[0]);
+            assertEquals(limit, chips[chips.length - 1]);
+            assertTrue(chips.length <= BetChips.MAX_CHIPS);
+            assertEquals(Math.min(limit, BetChips.MAX_CHIPS), chips.length, "limit " + limit);
+        }
+    }
 }
